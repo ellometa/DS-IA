@@ -4,8 +4,8 @@ Visualizer for exploring Most Recent Common Ancestor (MRCA) relationships in phy
 
 ## Files
 
-- `mrca_pygame_anytree.py` - Simple keyboard-controlled version
-- `mrca.py` - Interactive version with GUI dialogs
+- `mrca_pygame_anytree.py` - Interactive version with GUI dialogs and pan/zoom
+- `mrca.py` - Simple keyboard-controlled version
 
 ## Setup
 
@@ -15,19 +15,10 @@ source chalo/bin/activate
 
 ## Usage
 
-### Simple Version (mrca_pygame_anytree.py)
+### Interactive Version (mrca_pygame_anytree.py)
 
 ```bash
 python mrca_pygame_anytree.py
-```
-
-- Keys 1, 2, 3: Cycle through taxon pairs
-- Q/Esc: Quit
-
-### Interactive Version (mrca.py)
-
-```bash
-python mrca.py
 ```
 
 - S: Open dialog to select two animals
@@ -35,6 +26,15 @@ python mrca.py
 - +/-: Zoom
 - 0: Reset zoom
 - C: Clear selections
+- Q/Esc: Quit
+
+### Simple Version (mrca.py)
+
+```bash
+python mrca.py
+```
+
+- Keys 1, 2, 3: Cycle through taxon pairs
 - Q/Esc: Quit
 
 ## Tree Structure
