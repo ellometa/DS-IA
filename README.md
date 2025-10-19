@@ -1,5 +1,6 @@
 # MRCA Explorer 🧬
 
+Yes I used GPT for the readme, can you really blame me.
 A bare-bones visualizer for exploring Most Recent Common Ancestor (MRCA) relationships in phylogenetic trees, built with pygame + anytree.
 
 ## Features
