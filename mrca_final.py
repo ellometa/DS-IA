@@ -1,18 +1,40 @@
 import pygame as pgame
 import pygame_gui as pgui
 from anytree import Node
+import anytree
 from typing import TypeAlias
 
-family_tree = {
-    "Vertebrate": ["Mammal", "Reptile", "Bird"],
-    "Mammal": ["Primate", "Carnivore"],
-    "Reptile": ["Lizard", "Crocodilia"],
-    "Bird": ["Eagle", "Penguin"],
-    "Primate": ["Human", "Chimpanzee"],
-    "Carnivore": ["Dog", "Cat"],
-    "Lizard": ["Gecko", "Komodo Dragon"],
-    "Crocodilia": ["Crocodile", "Alligator"],
-}
+def build_tree():
+    """Build the family tree using anytree Node objects."""
+    # Create all nodes
+    vertebrate = Node("Vertebrate")
+    mammal = Node("Mammal", parent=vertebrate)
+    reptile = Node("Reptile", parent=vertebrate)
+    bird = Node("Bird", parent=vertebrate)
+    
+    primate = Node("Primate", parent=mammal)
+    carnivore = Node("Carnivore", parent=mammal)
+    
+    lizard = Node("Lizard", parent=reptile)
+    crocodilia = Node("Crocodilia", parent=reptile)
+    
+    eagle = Node("Eagle", parent=bird)
+    penguin = Node("Penguin", parent=bird)
+    
+    human = Node("Human", parent=primate)
+    chimpanzee = Node("Chimpanzee", parent=primate)
+    
+    dog = Node("Dog", parent=carnivore)
+    cat = Node("Cat", parent=carnivore)
+    
+    gecko = Node("Gecko", parent=lizard)
+    komodo_dragon = Node("Komodo Dragon", parent=lizard)
+    
+    crocodile = Node("Crocodile", parent=crocodilia)
+    alligator = Node("Alligator", parent=crocodilia)
+    
+    return vertebrate
+
 root_name = "Vertebrate"
 
 screen_width = 1280
@@ -38,73 +60,77 @@ min_zoom = 0.3
 max_zoom = 3.0
 
 
-def make_parent_list(tree, root):
-    parent_list = {}
-    parent_list[root] = None
-    
-    animals_to_check = [root]
-    
-    while len(animals_to_check) > 0:
-        current_animal = animals_to_check.pop(0)
-        
-        if current_animal in tree:
-            children = tree[current_animal]
-            for child in children:
-                parent_list[child] = current_animal
-                animals_to_check.append(child)
-    
-    return parent_list
+def nodesearch_root_key(root_n, name):
+    for node in root_n.descendants:
+        if node.name == name:
+            return node
+    if root_n.name == name:
+        return root_n
+    return None
 
-def get_path_to_root(animal_name, parent_list):
-    path = []
-    current = animal_name
-    
-    while current is not None:
-        path.append(current)
-        current = parent_list.get(current)
-    
-    path.reverse()
-    return path
+def get_path_to_root(root_n, animal_name):
+    nim = nodesearch_root_key(root_n, animal_name)
+    if nim is None:
+        return []
+    return [ancestor.name for ancestor in nim.path]
 
-def find_common_ancestor(animal_a, animal_b, parent_list):
+def _lca_align_depth(n1, n2):
+    """Bring both nodes to the same depth, then climb together until they meet."""
+    d1, d2 = n1.depth, n2.depth
+
+    # Raise deeper node
+    while d1 > d2:
+        n1 = n1.parent
+        d1 -= 1
+    while d2 > d1:
+        n2 = n2.parent
+        d2 -= 1
+
+    # Climb together
+    while n1 is not n2:
+        n1 = n1.parent
+        n2 = n2.parent
+        if n1 is None or n2 is None:
+            return None
+    return n1
+
+def find_common_ancestor(root_n, animal_a, animal_b):
     if not animal_a or not animal_b:
         return None
     
-    path_a = get_path_to_root(animal_a, parent_list)
+    nim_a = nodesearch_root_key(root_n, animal_a)
+    nim_b = nodesearch_root_key(root_n, animal_b)
+    if nim_a is None or nim_b is None:
+        return None
+
+    ca = _lca_align_depth(nim_a, nim_b)
     
-    current = animal_b
-    while current is not None:
-        if current in path_a:
-            return current
-        current = parent_list.get(current)
-    
-    return None
+    if ca:
+        return ca.name
+    else: 
+        return None
 
 
-def calculate_positions(tree, root, x_space, y_space):
+
+
+def calculate_positions(root_n, x_space, y_space):
+    """Calculate positions for all nodes in the tree."""
     positions = {}
-    levels = {}
+    lvls = {}
     
-    animals_to_check = [(root, 0)]
+    for node in anytree.LevelOrderIter(root_n):
+        lvl = node.depth
+        if lvl not in lvls:
+            lvls[lvl] = []
+        lvls[lvl].append(node.name)
     
-    while len(animals_to_check) > 0:
-        animal, level = animals_to_check.pop(0)
-        
-        if level not in levels:
-            levels[level] = []
-        levels[level].append(animal)
-        
-        if animal in tree:
-            for child in tree[animal]:
-                animals_to_check.append((child, level + 1))
-    
-    for level, animals in levels.items():
+    for lvl, animals in lvls.items():
         num_animals = len(animals)
         
         for i, animal in enumerate(animals):
             offset = i - (num_animals - 1) / 2.0
             x = offset * x_space
-            y = level * y_space
+            y = lvl * y_space
             positions[animal] = (x, y)
     
     return positions
@@ -121,50 +147,41 @@ def all_positions_to_screen(positions, zoom, pan_x, pan_y, center_x, top_space):
     return screen_positions
 
 
-def make_dialog_box(ui_manager, window_width, window_height):
-    dialog_x = window_width // 2 - 200
-    dialog_y = window_height // 2 - 150
-    dialog_width = 400
-    dialog_height = 300
-    
-    dialog_box = pgame.Rect(dialog_x, dialog_y, dialog_width, dialog_height)
-    
+def make_dialog_box(ui_man, wnd_width, wnd_height):
+    dia_x = wnd_width // 2 - 199
+    dia_y = wnd_height // 2 - 149
+    dia_wid = 400
+    dia_hght = 300
+
+    dialog_box = pgame.Rect(dia_x, dia_y, dia_wid, dia_hght)
+
     dialog = pgui.windows.UIConfirmationDialog(
         rect=dialog_box,
-        manager=ui_manager,
+        manager=ui_man,  # <-- was 'man', must be 'manager'
         window_title="Pick Two Animals",
         action_long_desc="Type the names of two animals to find their common ancestor:",
         action_short_name="OK"
     )
-    
+
     text_box_a = pgui.elements.UITextEntryLine(
-        relative_rect=pgame.Rect(50, 100, 300, 30),
-        manager=ui_manager,
+        relative_rect=pgame.Rect(50, 100, 300, 30),  # <-- was 'rel_rect', must be 'relative_rect'
+        manager=ui_man,                               # <-- was 'man', must be 'manager'
         container=dialog,
         placeholder_text="First Animal"
     )
-    
+
     text_box_b = pgui.elements.UITextEntryLine(
-        relative_rect=pgame.Rect(50, 150, 300, 30),
-        manager=ui_manager,
+        relative_rect=pgame.Rect(50, 150, 300, 30),  # <-- was 'rel_rect', must be 'relative_rect'
+        manager=ui_man,                               # <-- was 'man', must be 'manager'
         container=dialog,
         placeholder_text="Second Animal"
     )
-    
+
     return dialog, text_box_a, text_box_b
 
-def get_all_animal_names(tree, root):
-    all_animals = [root]
-    animals_to_check = [root]
-    
-    while len(animals_to_check) > 0:
-        current = animals_to_check.pop(0)
-        if current in tree:
-            for child in tree[current]:
-                all_animals.append(child)
-                animals_to_check.append(child)
-    
-    return all_animals
+
+def get_all_animal_names(root_n):
+    return [node.name for node in anytree.LevelOrderIter(root_n)]
 
 
 def draw_legend(screen, normal_font, title_font):
@@ -180,14 +197,14 @@ def draw_legend(screen, normal_font, title_font):
     ]
     
     title_wid = title_font.size("Legend")[0]
-    max_text_width = title_wid
+    max_wid = title_wid
     for label, _, _ in legend_items:
         text_wid = normal_font.size(label)[0]
 
-        if text_wid > max_text_width:
-            max_text_width = text_wid
+        if text_wid > max_wid:
+            max_wid = text_wid
     
-    box_width = max_text_width + 2 * box_padding + circle_size * 2
+    box_width = max_wid + 2 * box_padding + circle_size * 2
     box_height = box_padding * 2 + line_spacing * (len(legend_items) + 1)
     
     legend_rect = pgame.Rect(0, 0, box_width, box_height)
@@ -196,79 +213,87 @@ def draw_legend(screen, normal_font, title_font):
     pgame.draw.rect(screen, light_gray, legend_rect, border_radius=10)
     pgame.draw.rect(screen, black, legend_rect, width=1, border_radius=10)
     
-    title_text = title_font.render("Legend", True, gray)
-    screen.blit(title_text, (legend_rect.left + box_padding, legend_rect.top + box_padding))
+    legend_title_surface = title_font.render("Legend", True, gray)
+    title_x = legend_rect.x + box_padding
+    title_y = legend_rect.y + box_padding
+    screen.blit(legend_title_surface, (title_x, title_y))
     
     y_position = legend_rect.top + box_padding + line_spacing
     for label, circle_color, fill_color in legend_items:
-        circle_x = legend_rect.left + box_padding + circle_size
-        circle_y = y_position + circle_size // 2
-        pgame.draw.circle(screen, fill_color, (circle_x, circle_y), circle_size)
-        pgame.draw.circle(screen, circle_color, (circle_x, circle_y), circle_size, width=2)
+        circ_x = legend_rect.left + box_padding + circle_size
+        circ_y = y_position + circle_size // 2
+        pgame.draw.circle(screen, fill_color, (circ_x, circ_y), circle_size)
+        pgame.draw.circle(screen, circle_color, (circ_x, circ_y), circle_size, width=2)
         
         text_surface = normal_font.render(label, True, gray)
-        screen.blit(text_surface, (circle_x + circle_size + 8, y_position))
+        screen.blit(text_surface, (circ_x + circle_size + 8, y_position))
         
         y_position += line_spacing
 
 
-def draw_everything(screen, tree, screen_positions, selections, parent_map, fonts):
+def draw_everything(screen, root_n, screen_positions, selections, fonts):
     screen.fill(white)
     normal_font, title_font = fonts
 
     animal_a, animal_b = selections
     
-    common_ancestor = find_common_ancestor(animal_a, animal_b, parent_map)
+    common_ancestor = find_common_ancestor(root_n, animal_a, animal_b)
     
-    path_a = get_path_to_root(animal_a, parent_map) if animal_a else []
-    path_b = get_path_to_root(animal_b, parent_map) if animal_b else []
+    trail_a = get_path_to_root(root_n, animal_a) if animal_a else []
+    trail_b = get_path_to_root(root_n, animal_b) if animal_b else []
     
-    family_a = set(path_a)
-    family_b = set(path_b)
+    family_a = set(trail_a)
+    family_b = set(trail_b)
 
-    for parent, children in tree.items():
-        parent_x, parent_y = screen_positions[parent]
-        for child in children:
-            child_x, child_y = screen_positions[child]
-            pgame.draw.line(screen, black, (parent_x, parent_y), (child_x, child_y), width=2)
+    # Draw tree edges
+    for node in anytree.LevelOrderIter(root_n):
+        par_name = node.name
+        if par_name in screen_positions:
+            for child in node.children:
+                chld_name = child.name
+                if chld_name in screen_positions:
+                    par_x, par_y = screen_positions[par_name]
+                    chld_x, chld_y = screen_positions[chld_name]
+                    pgame.draw.line(screen, black, (par_x, par_y), (chld_x, chld_y), width=2)
 
-    for idx in range(len(path_a) - 1):
-        ancestor = path_a[idx]
-        descendant = path_a[idx + 1]
+    for idx in range(len(trail_a) - 1):
+        ancestor = trail_a[idx]
+        descendant = trail_a[idx + 1]
         if ancestor in screen_positions and descendant in screen_positions:
-            start_x, start_y = screen_positions[ancestor]
-            end_x, end_y = screen_positions[descendant]
-            pgame.draw.line(screen, blue, (start_x, start_y), (end_x, end_y), width=4)
+            sbegin_x, sbegin_y = screen_positions[ancestor]
+            send_x, send_y = screen_positions[descendant]
+            pgame.draw.line(screen, blue, (sbegin_x, sbegin_y), (send_x, send_y), width=4)
     
-    for i in range(len(path_b) - 1):
-        parent = path_b[i]
-        child = path_b[i + 1]
+
+    for i in range(len(trail_b) - 1):
+        parent = trail_b[i]
+        child = trail_b[i + 1]
         if parent in screen_positions and child in screen_positions:
-            parent_x, parent_y = screen_positions[parent]
-            child_x, child_y = screen_positions[child]
-            pgame.draw.line(screen, orange, (parent_x, parent_y), (child_x, child_y), width=4)
+            par_x, par_y = screen_positions[parent]
+            chld_x, chld_y = screen_positions[child]
+            pgame.draw.line(screen, orange, (par_x, par_y), (chld_x, chld_y), width=4)
 
     for animal, (x, y) in screen_positions.items():
+        nsop = (int(x), int(y))
         if animal == common_ancestor:
-            pgame.draw.circle(screen, light_green, (int(x), int(y)), node_size)
-            pgame.draw.circle(screen, green, (int(x), int(y)), node_size, width=4)
+            pgame.draw.circle(screen, light_green, nsop, node_size)
+            pgame.draw.circle(screen, green, nsop, node_size, width=4)
         else:
             if animal in family_a and animal in family_b:
-                mixed_color = (143, 123, 97)
-                pgame.draw.circle(screen, mixed_color, (int(x), int(y)), node_size)
+                pgame.draw.circle(screen, (143, 123, 97), nsop, node_size)
             elif animal in family_b:
-                pgame.draw.circle(screen, orange, (int(x), int(y)), node_size)
+                pgame.draw.circle(screen, orange, nsop, node_size)
             elif animal in family_a:
-                pgame.draw.circle(screen, blue, (int(x), int(y)), node_size)
+                pgame.draw.circle(screen, blue, nsop, node_size)
             else:
-                pgame.draw.circle(screen, white, (int(x), int(y)), node_size)
-            
-            pgame.draw.circle(screen, black, (int(x), int(y)), node_size, width=2)
+                pgame.draw.circle(screen, white, nsop, node_size)
+            pgame.draw.circle(screen, black, nsop, node_size, width=2)
 
-    for animal, (x, y) in screen_positions.items():
-        name_text = normal_font.render(animal, True, black)
-        text_rect = name_text.get_rect(center=(int(x), int(y) - node_size - 12))
-        screen.blit(name_text, text_rect)
+    for animal, pos in screen_positions.items():
+        x, y = pos
+        label_surface = normal_font.render(animal, True, black)
+        label_rect = label_surface.get_rect(center=(int(x), int(y) - node_size - 12))
+        screen.blit(label_surface, label_rect)
 
     if animal_a:
         display_a = animal_a
@@ -286,102 +311,104 @@ def draw_everything(screen, tree, screen_positions, selections, parent_map, font
         ancestor_text = "—"
     
     status_text = f"Animal A = {display_a}, Animal B = {display_b}   |   Common Ancestor = {ancestor_text}"
-    status_surface = title_font.render(status_text, True, black)
-    screen.blit(status_surface, (20, 20))
+    stat_srf = title_font.render(status_text, True, black)
+    screen.blit(stat_srf, (20, 20))
 
     draw_legend(screen, normal_font, title_font)
 
 
-def keep_in_range(value, min_val, max_val):
-    if value < min_val:
-        return min_val
-    elif value > max_val:
-        return max_val
+def keep_in_range(val, mn_val, mx_val):
+    if val < mn_val:
+        return mn_val
+    elif val > mx_val:
+        return mx_val
     else:
-        return value
+        return val
 
 def main():
     pgame.init()
     screen = pgame.display.set_mode((screen_width, screen_height))
     pgame.display.set_caption("Animal Family Tree")
-    clock = pgame.time.Clock()
+    clk = pgame.time.Clock()
     
     normal_font = pgame.font.SysFont(None, 22)
     title_font = pgame.font.SysFont(None, 28, bold=True)
     
-    ui_manager = pgui.UIManager((screen_width, screen_height))
+    ui_man = pgui.UIManager((screen_width, screen_height))
 
-    parent_list = make_parent_list(family_tree, root_name)
-    animal_positions = calculate_positions(family_tree, root_name, space_x, space_y)
-    all_animals = get_all_animal_names(family_tree, root_name)
+    root_n = build_tree()
+    animal_positions = calculate_positions(root_n, space_x, space_y)
+    all_taxa = get_all_animal_names(root_n)
 
-    zoom_level = 1.0
-    camera_x = 0.0
+    zoom_lvl = 1.0
+    cam_x = 0.0
     camera_y = 0.0
     selected_animals = [None, None]
     center_x = screen_width // 2
 
-    running = True
+    looping = True
     dialog_box = None
     text_box_a = None
     text_box_b = None
 
-    while running:
-        time_delta = clock.tick(60) / 1000.0
+    while looping:
+        time_delta = clk.tick(60) / 1000.0
         
         screen_positions = all_positions_to_screen(
-            animal_positions, zoom_level, camera_x, camera_y, center_x, top_space
+            animal_positions, zoom_lvl, cam_x, camera_y, center_x, top_space
         )
 
         for event in pgame.event.get():
+            evnt = getattr(event, "key", None)
+
             if event.type == pgame.QUIT:
-                running = False
+                looping = False
             elif event.type == pgame.KEYDOWN:
-                if event.key in (pgame.K_ESCAPE, pgame.K_q):
-                    running = False
-                elif event.key in (pgame.K_0, pgame.K_KP0):
-                    zoom_level = 1.0
-                    camera_x = 0.0
+                if evnt in (pgame.K_ESCAPE, pgame.K_q):
+                    looping = False
+                elif evnt in (pgame.K_0, pgame.K_KP0):
+                    zoom_lvl = 1.0
+                    cam_x = 0.0
                     camera_y = 0.0
-                elif event.key in (pgame.K_MINUS, pgame.K_KP_MINUS):
-                    zoom_level = keep_in_range(zoom_level * zoom_out, min_zoom, max_zoom)
-                elif event.key in (pgame.K_EQUALS, pgame.K_PLUS, pgame.K_KP_PLUS):
-                    zoom_level = keep_in_range(zoom_level * zoom_in, min_zoom, max_zoom)
-                elif event.key == pgame.K_LEFT:
-                    camera_x -= move_amount
-                elif event.key == pgame.K_RIGHT:
-                    camera_x += move_amount
-                elif event.key == pgame.K_UP:
+                elif evnt in (pgame.K_MINUS, pgame.K_KP_MINUS):
+                    zoom_lvl = keep_in_range(zoom_lvl * zoom_out, min_zoom, max_zoom)
+                elif evnt in (pgame.K_EQUALS, pgame.K_PLUS, pgame.K_KP_PLUS):
+                    zoom_lvl = keep_in_range(zoom_lvl * zoom_in, min_zoom, max_zoom)
+                elif evnt == pgame.K_LEFT:
+                    cam_x -= move_amount
+                elif evnt == pgame.K_RIGHT:
+                    cam_x += move_amount
+                elif evnt == pgame.K_UP:
                     camera_y -= move_amount
-                elif event.key == pgame.K_DOWN:
+                elif evnt == pgame.K_DOWN:
                     camera_y += move_amount
-                elif event.key == pgame.K_c:
+                elif evnt == pgame.K_c:
                     selected_animals = [None, None]
-                elif event.key == pgame.K_r:
-                    animal_positions = calculate_positions(family_tree, root_name, space_x, space_y)
-                elif event.key == pgame.K_s:
+                elif evnt == pgame.K_r:
+                    animal_positions = calculate_positions(root_n, space_x, space_y)
+                elif evnt == pgame.K_s:
                     if dialog_box is None:
                         dialog_box, text_box_a, text_box_b = make_dialog_box(
-                            ui_manager, screen_width, screen_height
+                            ui_man, screen_width, screen_height
                         )
             
-            ui_manager.process_events(event)
+            ui_man.process_events(event)
             
             if (event.type == pgui.UI_CONFIRMATION_DIALOG_CONFIRMED and 
                 event.ui_object_id == '#confirmation_dialog'):
                 
                 if text_box_a and text_box_b:
-                    animal_a_name = text_box_a.get_text().strip()
-                    animal_b_name = text_box_b.get_text().strip()
+                    taxa_a_name = text_box_a.get_text().strip()
+                    taxa_b_name = text_box_b.get_text().strip()
                     
-                    if animal_a_name in all_animals and animal_b_name in all_animals:
-                        selected_animals = [animal_a_name, animal_b_name]
-                    elif animal_a_name not in all_animals and animal_b_name not in all_animals:
-                        print(f"Neither '{animal_a_name}' nor '{animal_b_name}' are valid animal names")
-                    elif animal_a_name not in all_animals:
-                        print(f"'{animal_a_name}' is not a valid animal name")
+                    if taxa_a_name in all_taxa and taxa_b_name in all_taxa:
+                        selected_animals = [taxa_a_name, taxa_b_name]
+                    elif taxa_a_name not in all_taxa and taxa_b_name not in all_taxa:
+                        print(f"Neither '{taxa_a_name}' nor '{taxa_b_name}' are valid animal names")
+                    elif taxa_a_name not in all_taxa:
+                        print(f"'{taxa_a_name}' is not a valid animal name")
                     else:
-                        print(f"'{animal_b_name}' is not a valid animal name")
+                        print(f"'{taxa_b_name}' is not a valid animal name")
                 
                 dialog_box = None
                 text_box_a = None
@@ -394,18 +421,17 @@ def main():
                 text_box_a = None
                 text_box_b = None
 
-        ui_manager.update(time_delta)
+        ui_man.update(time_delta)
         
         draw_everything(
             screen,
-            family_tree,
+            root_n,
             screen_positions,
             selected_animals,
-            parent_list,
             (normal_font, title_font),
         )
         
-        ui_manager.draw_ui(screen)
+        ui_man.draw_ui(screen)
         
         pgame.display.flip()
 
